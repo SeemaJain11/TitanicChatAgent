@@ -1,0 +1,20 @@
+# Backend dependencies
+fastapi==0.109.0
+uvicorn[standard]==0.27.0
+pydantic==2.5.3
+python-multipart==0.0.6
+langchain==0.1.4
+langchain-openai==0.0.5
+langchain-experimental==0.0.49
+openai==1.10.0
+pandas==2.1.4
+numpy==1.26.3
+
+# Frontend dependencies
+streamlit==1.30.0
+plotly==5.18.0
+requests==2.31.0
+
+# Utility dependencies
+python-dotenv==1.0.0
+seaborn==0.13.1
