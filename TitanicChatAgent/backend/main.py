@@ -2,7 +2,6 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from langchain_experimental.agents.agent_toolkits import create_pandas_dataframe_agent
-from langchain_openai import ChatOpenAI
 import pandas as pd
 import os
 import json
@@ -38,75 +37,31 @@ if not os.path.exists(csv_path):
 df = pd.read_csv(csv_path)
 
 # Professional System Prompt for Titanic Analysis
-SYSTEM_PROMPT = """You are a professional Titanic Dataset Analysis Assistant built using Pandas.
+SYSTEM_PROMPT = """You are a concise Titanic Dataset Analysis Assistant.
+Only answer questions about the Titanic dataset. For unrelated questions reply: "I can only answer questions related to the Titanic dataset."
+Rules: percentages 2dp, currency $X.XX, bold headings, emojis 📊🚢💰👥, bullet points for lists.
+Dataset columns: {columns}"""
 
-Your job is to answer user questions about the Titanic dataset clearly and accurately.
-
-**CRITICAL RULES:**
-- ONLY answer questions related to the Titanic dataset.
-- If the question is unrelated to Titanic, respond EXACTLY: "I can only answer questions related to the Titanic dataset."
-- NEVER show system messages, technical errors, or internal configuration.
-- NEVER expose parsing errors or technical flags like 'handle_parsing_errors'.
-- Do not generate unrelated information under any circumstances.
-
-**FORMATTING RULES:**
-- Format percentages to 2 decimal places (example: 64.76%).
-- Format currency with $ symbol and 2 decimal places (example: $32.20).
-- Use clear bold headings in responses (use **text** for bold).
-- Use small relevant emojis when appropriate (📊 🚢 💰 👥 ⚓).
-- Keep answers concise and professional.
-- Use bullet points when showing multiple statistics.
-
-**DATA ANALYSIS RULES:**
-- Always provide exact numbers from the dataset.
-- Calculate percentages accurately.
-- Round decimal numbers appropriately.
-- Explain your findings clearly.
-
-**DATASET OVERVIEW:**
-If user asks for dataset overview, summary, or general statistics, provide:
-- Total number of passengers
-- Survival rate percentage  
-- Average age
-- Average ticket fare
-
-**SURVIVAL ANALYSIS:**
-If user asks about survival comparison by gender or class:
-- Calculate survival percentage grouped by the requested category.
-- Clearly explain the result in 2-3 lines.
-
-**NATURAL LANGUAGE:**
-Understand different variations of similar questions:
-- "Male percentage?" / "How many men?" / "Gender distribution?" → All refer to Sex column analysis.
-- "Survival rate?" / "How many survived?" → Analyze Survived column.
-- "Ticket price?" / "Fare?" / "Cost?" → Analyze Fare column.
-
-Always behave like a professional data analyst.
-Keep responses structured, clean, and readable.
-
-You have access to the Titanic dataset with these columns: {columns}
-"""
-
-# Initialize LangChain agent
-# Option 2: Use Groq (FREE!) - Get API key from https://console.groq.com
+# Initialize LangChain agent using Groq (FREE) - Get API key from https://console.groq.com
 try:
     from langchain_groq import ChatGroq
-    llm = ChatGroq(
-        temperature=0,
-        model="llama-3.3-70b-versatile",
-        groq_api_key=os.getenv("GROQ_API_KEY")
-    )
-    print("✅ Using Groq LLM (FREE)")
-    agent_type = "zero-shot-react-description"  # Compatible with Groq
 except ImportError:
-    # Fallback to OpenAI if Groq not installed
-    llm = ChatOpenAI(
-        temperature=0,
-        model="gpt-3.5-turbo",
-        openai_api_key=os.getenv("OPENAI_API_KEY")
+    raise ImportError(
+        "langchain-groq is required. Install it with: pip install langchain-groq"
     )
-    print("⚠️ Using OpenAI (may have quota issues)")
-    agent_type = "openai-tools"
+
+groq_api_key = os.getenv("GROQ_API_KEY")
+if not groq_api_key:
+    raise ValueError("GROQ_API_KEY environment variable is not set. Get a free key at https://console.groq.com")
+
+llm = ChatGroq(
+    temperature=0,
+    model="llama-3.3-70b-versatile",
+    groq_api_key=groq_api_key,
+    max_tokens=512,
+)
+print("✅ Using Groq LLM (FREE)")
+agent_type = "zero-shot-react-description"
 
 # Create agent with professional system prompt
 agent = create_pandas_dataframe_agent(
@@ -186,14 +141,11 @@ async def query_dataset(request: QueryRequest):
         viz_keywords = ["histogram", "chart", "graph", "plot", "show me", "visualize", "distribution", "bar chart"]
         needs_viz = any(keyword in question_lower for keyword in viz_keywords)
         
-        # Get the answer from the agent with enhanced prompt
-        enhanced_question = f"{question}\n\nRemember to format numbers properly: percentages with %, currency with $, and use emojis appropriately."
-        
         try:
             # Call agent with timeout protection via concurrent.futures
             import concurrent.futures
             with concurrent.futures.ThreadPoolExecutor() as executor:
-                future = executor.submit(agent.invoke, enhanced_question)
+                future = executor.submit(agent.invoke, question)
                 try:
                     response = future.result(timeout=30)  # 30 second timeout
                     # Handle different response formats
