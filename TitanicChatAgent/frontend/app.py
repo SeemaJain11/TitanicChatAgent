@@ -1,4 +1,13 @@
+import sys
 import streamlit as st
+
+# Enforce running with `streamlit run` command
+if "streamlit" not in sys.modules:
+    print("\n❌ ERROR: This app must be run with Streamlit!\n")
+    print("🔧 Fix: Use this command instead:\n")
+    print("   streamlit run app.py\n")
+    sys.exit(1)
+
 import requests
 import plotly.graph_objects as go
 import plotly.express as px
